@@ -59,14 +59,17 @@ print(f"=> rapidez acumulada:  eta = a*tau/c = tau[anos] / {K:.4f}")
 head("2", "Foguete de 1 g — viagem so de ida (tabela do documento)")
 # ==========================================================================
 print(f"{'tau (ano)':>10} {'t Terra (ano)':>18} {'distancia (al)':>18} "
-      f"{'v/c':>14} {'gamma':>14}")
+      f"{'1 - v/c':>13} {'gamma':>14}")
 for tau in (1, 2, 5, 10, 20, 30):
     eta = tau / K
     t_terra = K * sinh(eta)
     x_dist  = K * (cosh(eta) - 1.0)
+    # 1 - tanh(eta) satura em zero na dupla precisao a partir de eta ~ 19.
+    # A forma equivalente 2/(e^{2eta}+1) e estavel e e a que o documento cita.
+    um_menos_v = 2.0 / (exp(2 * eta) + 1.0)
     fmt = ",.2f" if t_terra < 1e5 else ".4g"
     print(f"{tau:>10} {t_terra:>18{fmt}} {x_dist:>18{fmt}} "
-          f"{tanh(eta):>14.11f} {cosh(eta):>14,.4g}")
+          f"{um_menos_v:>13.3e} {cosh(eta):>14,.4g}")
 
 # Ida e volta em quatro fases iguais (acelera, freia, volta, freia):
 #   t_total = 4 (c/a) sinh(a tau_total / 4c)
@@ -115,13 +118,18 @@ print(f"erro de posicao se ignorado: {liq*c/1000:.2f} km/dia")
 # ==========================================================================
 head("5", "Estacao Espacial — viagem ao futuro ja realizada por humanos")
 # ==========================================================================
-h_iss, v_iss, dias = 4.20e5, 7660.0, 878      # Gennady Padalka, recorde
+h_iss, v_iss = 4.20e5, 7660.0
 r_iss = R_E + h_iss
 gr = (GM_E / c**2) * (1.0 / R_E - 1.0 / r_iss)
 ci = v_iss**2 / (2 * c**2)
 taxa = ci - gr                                 # relogio a bordo atrasa
 print(f"taxa liquida = {taxa:.4e} s/s (a bordo atrasa)")
-print(f"em {dias} dias: {taxa*dias*day*1000:.1f} ms deslocado para o futuro")
+# O recorde de tempo acumulado em orbita mudou: Oleg Kononenko ultrapassou
+# Gennady Padalka em fevereiro de 2024 e encerrou a quinta missao com ~1111
+# dias. Padalka fica como referencia historica.
+for nome, dias in (("Padalka  (878 d, ex-recorde)", 878),
+                   ("Kononenko (1111 d, recorde)", 1111)):
+    print(f"  {nome:<30} -> {taxa*dias*day*1000:>5.1f} ms para o futuro")
 
 
 # ==========================================================================
@@ -132,7 +140,7 @@ print(f"Delta nu/nu = g h / c^2 = {g0*h/c**2:.3e}   (Chou et al., 2010)")
 
 
 # ==========================================================================
-head("7", "Buraco negro: onde pairar para que 1 hora valha 7 anos")
+head("7", "Buraco negro: o que custa fazer 1 hora valer 7 anos")
 # ==========================================================================
 # Schwarzschild estatico:  dtau/dt = sqrt(1 - r_s/r)
 fator = 7 * 365.25 * 24 / 1.0        # 7 anos por hora
@@ -140,11 +148,52 @@ print(f"fator pedido = {fator:,.0f}")
 razao = 1.0 / fator
 r_sobre_rs = 1.0 / (1.0 - razao**2)  # de sqrt(1 - rs/r) = 1/fator
 excesso = r_sobre_rs - 1.0
-print(f"r/r_s = 1 + {excesso:.4e}")
 M = 1e8 * M_sun
 r_s = 2 * G * M / c**2
+r = r_s * r_sobre_rs
 print(f"buraco negro de 1e8 massas solares: r_s = {r_s:.4e} m")
-print(f"=> pairar a {excesso*r_s:.1f} m acima do horizonte")
+print(f"r/r_s = 1 + {excesso:.4e}")
+
+# ATENCAO. r - r_s e uma diferenca de COORDENADA de Schwarzschild, nao uma
+# distancia medida com regua. Perto do horizonte a metrica estica o radial
+# de forma brutal, e as duas diferem por cinco ordens de grandeza.
+print(f"\n  r - r_s (coordenada, NAO e distancia) = {excesso*r_s:.1f} m")
+
+
+def dist_propria(r, r_s):
+    """Integral exata de dr/sqrt(1 - r_s/r) do horizonte ate r."""
+    return sqrt(r * (r - r_s)) + r_s * log((sqrt(r - r_s) + sqrt(r)) / sqrt(r_s))
+
+
+L = dist_propria(r, r_s)
+print(f"  distancia PROPRIA ate o horizonte      = {L:.4e} m = {L/1000:,.0f} km")
+print(f"  (aprox. de horizonte proximo, 2 r_s sqrt(eps) = {2*r_s*sqrt(excesso)/1000:,.0f} km)")
+
+# Aceleracao propria necessaria para permanecer estatico (nao cair):
+#   a = (GM/r^2) / sqrt(1 - r_s/r)
+a_estatico = (G * M / r**2) / sqrt(1 - r_s / r)
+print(f"\n  aceleracao propria para PAIRAR        = {a_estatico:.4e} m/s^2")
+print(f"                                        = {a_estatico/g0:.3e} g")
+print("  => pairar ali nao e 'de graca': custa ~950 milhoes de g de empuxo,")
+print("     nove ordens de grandeza pior que o foguete de 1 g do bloco 2.")
+print("  => a rota viavel e QUEDA LIVRE: uma orbita circular estavel em torno")
+print("     de um Kerr quase extremo, onde a aceleracao propria e zero. E a")
+print("     construcao de Thorne para o planeta de Miller, e exige spin a")
+print("     menos de ~1e-14 do valor extremo.")
+
+
+# ==========================================================================
+head("7b", "Assintota da hiperbole de Rindler (horizonte do bloco 2)")
+# ==========================================================================
+# Com x = K(cosh n - 1) e ct = K sinh n, temos ct - x -> K, e nao 0.
+# Logo a assintota e a reta  ct = x + K,  deslocada de K em relacao a reta
+# de 45 graus que passa pela origem. A reta ct = x NAO e o horizonte: e
+# apenas o raio de luz emitido no evento de partida, que ULTRAPASSA a nave.
+print("ct - x ao longo da trajetoria, para rapidez crescente:")
+for n in (1, 3, 6, 10, 20):
+    print(f"  eta = {n:>2}  ->  ct - x = {K*sinh(n) - K*(cosh(n)-1):.6f}")
+print(f"limite = K = c/g = {K:.6f} ano-luz")
+print("=> horizonte de Rindler:  ct = x + K   (nao  ct = x)")
 
 
 # ==========================================================================
